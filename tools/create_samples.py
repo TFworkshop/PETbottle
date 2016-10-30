@@ -49,6 +49,38 @@ def options(argv):
         ret = False
     return ret, files
 
+# 画像貼り付け
+def paste(dst, src, x, y, width, height):
+    resize = cv2.resize(src, tuple([width, height]))
+    if x >= dst.shape[1] or y >= dst.shape[0]:
+        return None
+    if x >= 0:
+        w = min(dst.shape[1] - x, resize.shape[1])
+        u = 0
+    else:
+        w = min(max(resize.shape[1] + x, 0), dst.shape[1])
+        u = min(-x, resize.shape[1] - 1)
+    if y >= 0:
+        h = min(dst.shape[0] - y, resize.shape[0])
+        v = 0
+    else:
+        w = min(max(resize.shape[0] + y, 0), dst.shape[0])
+        v = min(-y, resize.shape[1] - 1)
+    dst[y:y+h, x:x+w] = resize[v:v+h, u:u+h]
+    return dst
+
+# オリジナル
+def original(src):
+    # 背景画像生成
+    height,width = src.shape[:2]
+    base_width = int(width * 1.8)
+    base_height = int(height * 1.4)
+    size = tuple([base_height, base_width, 3])
+    base_img = np.zeros(size, dtype=np.uint8)
+    base_img.fill(255)
+    # 画像貼り付け
+    return paste(base_img, src, int(width*0.4), int(height*0.2), width, height)
+
 # ガンマ変換
 # 係数：0.75, 1.5
 def gamma(src):
@@ -161,6 +193,8 @@ def main(files):
 
         # イメージファイル読み込み
         src_img = cv2.imread(file)
+        # 周囲拡張
+        src_img = original(src_img)
         base_samples.append(src_img)
         # 回転
         base_samples.extend(rotation(src_img))
