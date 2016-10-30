@@ -155,30 +155,30 @@ def save_samples(dir, file, samples):
         cv2.imwrite(out, img)
 
 def main(files):
-    base_samples = []
-    samples = []
+    for file in files:
+        base_samples = []
+        samples = []
 
-    file = files[0]
-    # イメージファイル読み込み
-    src_img = cv2.imread(file)
-    base_samples.append(src_img)
-    # 回転
-    base_samples.extend(rotation(src_img))
-    # 射影
-    base_samples.extend(perspective(src_img))
-    # 平滑化, ノイズ付加等
-    for img in base_samples:
-        samples.append(img)
-        # ガンマ変換
-        # 係数：0.75, 1.5
-        samples.extend(gamma(img))
-        # 平滑化(Image Blurring)
-        # 係数：2x2, 4x4
-        samples.extend(smoothing(img))
-        # Salt&Pepperノイズ
-        # 係数：amount = 0.001 - 0.006, step 0.002)
-        samples.extend(saltpepper_noise(img))
-    save_samples(OUTPUT_DIR, file, samples)
+        # イメージファイル読み込み
+        src_img = cv2.imread(file)
+        base_samples.append(src_img)
+        # 回転
+        base_samples.extend(rotation(src_img))
+        # 射影
+        base_samples.extend(perspective(src_img))
+        # 平滑化, ノイズ付加等
+        for img in base_samples:
+            samples.append(img)
+            # ガンマ変換
+            # 係数：0.75, 1.5
+            samples.extend(gamma(img))
+            # 平滑化(Image Blurring)
+            # 係数：2x2, 4x4
+            samples.extend(smoothing(img))
+            # Salt&Pepperノイズ
+            # 係数：amount = 0.001 - 0.006, step 0.002)
+            samples.extend(saltpepper_noise(img))
+        save_samples(OUTPUT_DIR, file, samples)
         
 if __name__ == '__main__':
     ret, files = options(sys.argv[1:])
