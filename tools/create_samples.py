@@ -7,6 +7,7 @@ import sys
 import numpy as np
 import cv2
 
+# 出力ディレクトリ
 OUTPUT_DIR = './out'
 
 # 画像生成パラメータ
@@ -41,9 +42,15 @@ def options(argv):
     ret = True
     if len(argv) == 1:
         # files = os.listdir(argv[i])
-        cmd = argv[0]+'/*.jpg'
-        files = glob.glob(cmd)
-        if files == None:
+        files = []
+        if argv[0].endswith('/'):
+            cmd = argv[0]+'*.'
+        else:
+            cmd = argv[0]+'/*.'
+        for i in ['jpg', 'png']:
+            files.extend(glob.glob(cmd+i))
+        if files == []:
+            print('Not found image file.')
             ret = False
     else:
         ret = False
