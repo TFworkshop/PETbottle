@@ -10,7 +10,19 @@ import cv2
 # 出力ディレクトリ
 OUTPUT_DIR = './out'
 
+# 画像変換パラメータ
+# (注)比率は同じに!!
+OBJ_SIZE_W = 100  # suntory 200, cocacola 40, asahi 100
+OBJ_SIZE_H = 200  # suntory 400, cocacola 80, asahi 200
+OUT_SIZE_W = 20   # pattern size
+OUT_SIZE_H = 40   # pattern size
+
 # 画像生成パラメータ
+# 横方向にダミー付加(width * X))
+MARGIN_RATIO_X = 1.8  # suntory/asahi 1.8, cocacoka 1.0
+# 縦方向にダミー付加(height * Y))
+MARGIN_RATIO_Y = 1.4  # suntory/asahi 1.4, cocacola 1.0
+
 # ガンマ変換
 GAM_START = 1
 GAM_END   = 3
@@ -38,23 +50,28 @@ SPN_STEP  = 2
 SPN_SCALE = 0.001
 
 def options(argv):
-    files = None
+    files = []
     ret = True
-    if len(argv) == 1:
-        # files = os.listdir(argv[i])
-        files = []
-        if argv[0].endswith('/'):
-            cmd = argv[0]+'*.'
+    opt = 0
+    # parse
+    i = 0
+    while i < len(argv):
+        if argv[i] == '-cnv':
+            opt = 1
         else:
-            cmd = argv[0]+'/*.'
-        for i in ['jpg', 'png']:
-            files.extend(glob.glob(cmd+i))
-        if files == []:
-            print('Not found image file.')
-            ret = False
-    else:
+            if argv[i].endswith('/'):
+                cmd = argv[i]+'*.'
+            else:
+                cmd = argv[i]+'/*.'
+            for ex in ['jpg', 'png']:
+                files.extend(glob.glob(cmd+ex))
+        i += 1
+
+    if files == []:
+        print('Not found image file.')
         ret = False
-    return ret, files
+                        
+    return ret, opt, files
 
 # 画像貼り付け
 def paste(dst, src, x, y, width, height):
@@ -72,21 +89,23 @@ def paste(dst, src, x, y, width, height):
         v = 0
     else:
         w = min(max(resize.shape[0] + y, 0), dst.shape[0])
-        v = min(-y, resize.shape[1] - 1)
-    dst[y:y+h, x:x+w] = resize[v:v+h, u:u+h]
+        v = min(-y, resize.shape[0] - 1)
+    dst[y:y+h, x:x+w] = resize[v:v+h, u:u+w]
     return dst
 
 # オリジナル
 def original(src):
     # 背景画像生成
     height,width = src.shape[:2]
-    base_width = int(width * 1.8)
-    base_height = int(height * 1.4)
+    base_width = int(width * MARGIN_RATIO_X)
+    base_height = int(height * MARGIN_RATIO_Y)
     size = tuple([base_height, base_width, 3])
     base_img = np.zeros(size, dtype=np.uint8)
     base_img.fill(255)
     # 画像貼り付け
-    return paste(base_img, src, int(width*0.4), int(height*0.2), width, height)
+    sx = int(width * (MARGIN_RATIO_X - 1.0) / 2)
+    sy = int(height * (MARGIN_RATIO_Y - 1.0) / 2)
+    return paste(base_img, src, sx, sy, width, height)
 
 # ガンマ変換
 # 係数：0.75, 1.5
@@ -183,17 +202,32 @@ def saltpepper_noise(src):
     return samples
 
 # 生成サンプル保存
-def save_samples(dir, file, samples):
+def save_samples(dir, opt, file, samples):
     if not os.path.exists(dir):
         os.mkdir(dir)
 
     base = os.path.splitext(os.path.basename(file))[0] + '_'
     for i, img in enumerate(samples):
-        out = os.path.join(dir, base+str(i)+'.jpg')
-        print(out)
-        cv2.imwrite(out, img)
+        if opt == 1:
+            size = str(OUT_SIZE_W) + 'x' + str(OUT_SIZE_H) + '_'
+            out = os.path.join(dir, base+size+str(i)+'.jpg')
+            print(out)
+            # オブジェクト領域抽出
+            sx = (img.shape[1] - OBJ_SIZE_W) / 2
+            sy = (img.shape[0] - OBJ_SIZE_H) / 2
+            ex = (img.shape[1] + OBJ_SIZE_W) / 2
+            ey = (img.shape[0] + OBJ_SIZE_H) / 2
+            img1 = img[sy:ey, sx:ex]
+            # リサイズ
+            img2 = cv2.resize(img1, (OUT_SIZE_W, OUT_SIZE_H))
+            cv2.imwrite(out, img2)
 
-def main(files):
+        else:
+            out = os.path.join(dir, base+str(i)+'.jpg')
+            print(out)
+            cv2.imwrite(out, img)
+
+def main(opt, files):
     for file in files:
         base_samples = []
         samples = []
@@ -219,12 +253,10 @@ def main(files):
             # Salt&Pepperノイズ
             # 係数：amount = 0.001 - 0.006, step 0.002)
             samples.extend(saltpepper_noise(img))
-        save_samples(OUTPUT_DIR, file, samples)
+        save_samples(OUTPUT_DIR, opt, file, samples)
         
 if __name__ == '__main__':
-    ret, files = options(sys.argv[1:])
+    ret, opt, files = options(sys.argv[1:])
     if ret == False:
-        sys.exit('Usage: %s img_file' % sys.argv[0])
-    main(files)
-
-
+        sys.exit('Usage: %s <-cnv> input_directory' % sys.argv[0])
+    main(opt, files)
