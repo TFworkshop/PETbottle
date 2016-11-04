@@ -5,6 +5,7 @@ import os
 import glob
 import sys
 import numpy as np
+import csv
 import cv2
 
 # 出力ディレクトリ
@@ -40,8 +41,8 @@ ROT_END   = (5 + 1)
 ROT_STEP  = 2
 
 # 射影変換
-PSX_DELTA  = 0.25
-PSY_DELTA  = 0.1
+PSX_DELTA  = 2.5   # 0.25
+PSY_DELTA  = 1.0   # 0.1
 
 # Salt&Pepperノイズ
 SPN_START = 1
@@ -49,15 +50,44 @@ SPN_END   = (5 + 1)
 SPN_STEP  = 2
 SPN_SCALE = 0.001
 
+class param:
+    def __init__(self):
+        self.cnv = 0
+        self.obj_w = OBJ_SIZE_W
+        self.obj_h = OBJ_SIZE_H
+        self.out_w = OUT_SIZE_W
+        self.out_h = OUT_SIZE_H
+        self.label = ''
+        self.out_dir = OUTPUT_DIR
+
 def options(argv):
     files = []
     ret = True
-    opt = 0
+    opt = param()
     # parse
     i = 0
     while i < len(argv):
         if argv[i] == '-cnv':
-            opt = 1
+            opt.cnv = 1
+            i += 1
+        elif argv[i] == '-obj_w':
+            opt.obj_w = int(argv[i+1])
+            i += 2
+        elif argv[i] == '-obj_h':
+            opt.obj_h = int(argv[i+1])
+            i += 2
+        elif argv[i] == '-out_w':
+            opt.out_w = int(argv[i+1])
+            i += 2
+        elif argv[i] == '-out_h':
+            opt.out_h = int(argv[i+1])
+            i += 2
+        elif argv[i] == '-label':
+            opt.label = argv[i+1]
+            i += 2
+        elif argv[i] == '-out_dir':
+            opt.out_dir = argv[i+1]
+            i += 2
         else:
             if argv[i].endswith('/'):
                 cmd = argv[i]+'*.'
@@ -65,7 +95,7 @@ def options(argv):
                 cmd = argv[i]+'/*.'
             for ex in ['jpg', 'png']:
                 files.extend(glob.glob(cmd+ex))
-        i += 1
+            i += 1
 
     if files == []:
         print('Not found image file.')
@@ -201,34 +231,46 @@ def saltpepper_noise(src):
         samples.append(out)
     return samples
 
+# ラベル読み込み
+def load_labels(fname):
+    labels = []
+    if fname == '':
+        return labels
+    f = open(opt.label, 'rb')
+    reader = csv.reader(f)
+    for row in reader:
+        labels.append(row[2])
+    return labels
+
 # 生成サンプル保存
-def save_samples(dir, opt, file, samples):
-    if not os.path.exists(dir):
-        os.mkdir(dir)
+def save_samples(opt, file, label, samples):
+    if not os.path.exists(opt.out_dir):
+        os.mkdir(opt.out_dir)
 
     base = os.path.splitext(os.path.basename(file))[0] + '_'
     for i, img in enumerate(samples):
-        if opt == 1:
-            size = str(OUT_SIZE_W) + 'x' + str(OUT_SIZE_H) + '_'
-            out = os.path.join(dir, base+size+str(i)+'.jpg')
-            print(out)
+        if opt.cnv == 1:
+            size = str(opt.out_w) + 'x' + str(opt.out_h) + '_'
+            out = os.path.join(opt.out_dir, base+size+str(i)+'.jpg')
+            print('%s, %s'%(out, label))
             # オブジェクト領域抽出
-            sx = (img.shape[1] - OBJ_SIZE_W) / 2
-            sy = (img.shape[0] - OBJ_SIZE_H) / 2
-            ex = (img.shape[1] + OBJ_SIZE_W) / 2
-            ey = (img.shape[0] + OBJ_SIZE_H) / 2
+            sx = (img.shape[1] - opt.obj_w) / 2
+            sy = (img.shape[0] - opt.obj_h) / 2
+            ex = (img.shape[1] + opt.obj_w) / 2
+            ey = (img.shape[0] + opt.obj_h) / 2
             img1 = img[sy:ey, sx:ex]
             # リサイズ
-            img2 = cv2.resize(img1, (OUT_SIZE_W, OUT_SIZE_H))
+            img2 = cv2.resize(img1, (opt.out_w, opt.out_h))
             cv2.imwrite(out, img2)
 
         else:
             out = os.path.join(dir, base+str(i)+'.jpg')
-            print(out)
+            print('%s, %s'%(out, label))
             cv2.imwrite(out, img)
 
 def main(opt, files):
-    for file in files:
+    labels = load_labels(opt.label)
+    for i, file in enumerate(files):
         base_samples = []
         samples = []
 
@@ -253,10 +295,14 @@ def main(opt, files):
             # Salt&Pepperノイズ
             # 係数：amount = 0.001 - 0.006, step 0.002)
             samples.extend(saltpepper_noise(img))
-        save_samples(OUTPUT_DIR, opt, file, samples)
+        if len(labels) > 0:
+            label = labels[i]
+        else:
+            label = None
+        save_samples(opt, file, label, samples)
         
 if __name__ == '__main__':
     ret, opt, files = options(sys.argv[1:])
     if ret == False:
-        sys.exit('Usage: %s <-cnv> input_directory' % sys.argv[0])
+        sys.exit('Usage: %s <-cnv> <-obj_w width> <-obj_h height> <-out_w widht> <-out_h height> <-label label> <-out_dir output directory> input_directory' % sys.argv[0])
     main(opt, files)
