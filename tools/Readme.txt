@@ -7,12 +7,22 @@
      - 出力画像はjpg.
 
  - "-cnv"：プログラム中の画像変換パラメータに基づいて, 学習用サイズの画像に変換
+   画像変換パラメータ：
+        "-obj_w" --- 元画像のオブジェクトの横サイズ
+        "-obj_h" --- 元画像のオブジェクトの縦サイズ
+        "-out_w" --- 出力画像の横サイズ
+        "-out_h" --- 出力画像の縦サイズ
    注)
      - オブジェクトサイズは画像変換が入るので, オブジェクトより
        一回り大きいサイズを指定する.
 
+ - "-label"：ラベリングデータ(xxx.csv)をベースに, 画像フィアル, ラベルを
+   出力する.
+
+ - "-out_dir"：画像出力ディレクトリを指定する.
+
 使い方
-　python create_samples.py <-cnv> input_dir
+　python create_samples.py <-cnv> <-obj_w width> <-obj_h height> <-out_w width> <-obj_h height> <-label label_file> <-out_dir output_dir> input_dir
 
 
 

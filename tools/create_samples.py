@@ -242,6 +242,14 @@ def load_labels(fname):
         labels.append(row[2])
     return labels
 
+def get_label(file, labels):
+    base = os.path.splitext(os.path.basename(file))[0]
+    if len(labels) > 0:
+        label = labels[int(base[-4:])]
+    else:
+        label = None
+    return label
+
 # 生成サンプル保存
 def save_samples(opt, file, label, samples):
     if not os.path.exists(opt.out_dir):
@@ -270,7 +278,7 @@ def save_samples(opt, file, label, samples):
 
 def main(opt, files):
     labels = load_labels(opt.label)
-    for i, file in enumerate(files):
+    for file in files:
         base_samples = []
         samples = []
 
@@ -295,10 +303,8 @@ def main(opt, files):
             # Salt&Pepperノイズ
             # 係数：amount = 0.001 - 0.006, step 0.002)
             samples.extend(saltpepper_noise(img))
-        if len(labels) > 0:
-            label = labels[i]
-        else:
-            label = None
+
+        label = get_label(file, labels)
         save_samples(opt, file, label, samples)
         
 if __name__ == '__main__':
