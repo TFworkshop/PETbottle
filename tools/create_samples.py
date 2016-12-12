@@ -13,16 +13,16 @@ OUTPUT_DIR = './out'
 
 # 画像変換パラメータ
 # (注)比率は同じに!!
-OBJ_SIZE_W = 100  # suntory 200, cocacola 40, asahi 100
-OBJ_SIZE_H = 200  # suntory 400, cocacola 80, asahi 200
+OBJ_SIZE_W = 100  # suntory 200, cocacola 40, asahi 100, kao 45, kirin 260
+OBJ_SIZE_H = 200  # suntory 400, cocacola 80, asahi 200, kao 90, kirin 520
 OUT_SIZE_W = 20   # pattern size
 OUT_SIZE_H = 40   # pattern size
 
 # 画像生成パラメータ
 # 横方向にダミー付加(width * X))
-MARGIN_RATIO_X = 1.8  # suntory/asahi 1.8, cocacoka 1.0
+MARGIN_RATIO_X = 4.0
 # 縦方向にダミー付加(height * Y))
-MARGIN_RATIO_Y = 1.4  # suntory/asahi 1.4, cocacola 1.0
+MARGIN_RATIO_Y = 2.0  
 
 # ガンマ変換
 GAM_START = 1
@@ -41,8 +41,10 @@ ROT_END   = (5 + 1)
 ROT_STEP  = 2
 
 # 射影変換
-PSX_DELTA  = 2.5   # 0.25
-PSY_DELTA  = 1.0   # 0.1
+PSX_DELTA  = 0.2   # suntory/kirin 0.2, cocacola/otsuka/kao 1.5, asahi/dydo/cheerio 0.5
+PSY_DELTA  = 0.1   # suntory/kirin 0.1, cocacola/otsuka/kao 0.75  asahi/dydo/cheerio 0.25
+
+
 
 # Salt&Pepperノイズ
 SPN_START = 1
@@ -93,14 +95,15 @@ def options(argv):
                 cmd = argv[i]+'*.'
             else:
                 cmd = argv[i]+'/*.'
-            for ex in ['jpg', 'png']:
+            for ex in ['jpg', 'png', 'gif']:
                 files.extend(glob.glob(cmd+ex))
             i += 1
 
     if files == []:
         print('Not found image file.')
         ret = False
-                        
+
+    files.sort() 
     return ret, opt, files
 
 # 画像貼り付け
@@ -239,6 +242,7 @@ def load_labels(fname):
     f = open(opt.label, 'rb')
     reader = csv.reader(f)
     for row in reader:
+        print row[0]
         labels.append(row[2])
     return labels
 
@@ -260,7 +264,7 @@ def save_samples(opt, file, label, samples):
         if opt.cnv == 1:
             size = str(opt.out_w) + 'x' + str(opt.out_h) + '_'
             out = os.path.join(opt.out_dir, base+size+str(i)+'.jpg')
-            print('%s, %s'%(out, label))
+            print('%s,%s'%(out, label))
             # オブジェクト領域抽出
             sx = (img.shape[1] - opt.obj_w) / 2
             sy = (img.shape[0] - opt.obj_h) / 2
@@ -273,7 +277,7 @@ def save_samples(opt, file, label, samples):
 
         else:
             out = os.path.join(dir, base+str(i)+'.jpg')
-            print('%s, %s'%(out, label))
+            print('%s,%s'%(out, label))
             cv2.imwrite(out, img)
 
 def main(opt, files):
