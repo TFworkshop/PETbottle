@@ -23,8 +23,8 @@ CLASSES = ('aeroplane', 'bicycle', 'bird', 'boat',
            'motorbike', 'person', 'pottedplant',
            'sheep', 'sofa', 'train', 'tvmonitor')
 
-OUT_IMG_WIDTH  = 40
-OUT_IMG_HEIGHT = 80
+OUT_IMG_WIDTH  = 32
+OUT_IMG_HEIGHT = 64
 PET_THRESH     = 0.5
 
 sess = tf.Session()
@@ -110,6 +110,21 @@ def disp_result(res):
             score = np.sort(res)[0][::-1][i]
     return first, score
 
+# ホワイトニング処理
+def _image_whitening(img):
+    img = img.astype(np.float32)
+    d, w, h = img.shape
+    num_pixels = d * w * h
+    mean = img.mean()
+    variance = np.mean(np.square(img)) - np.square(mean)
+    stddev = np.sqrt(variance)
+    min_stddev = 1.0 / np.sqrt(num_pixels)
+    scale = stddev if stddev > min_stddev else min_stddev
+    img -= mean
+    img /= scale
+    # print img
+    return img
+
 def bottle_recognition(img, dets, thresh=0.6):
     height = img.shape[0]
     width = img.shape[1]
@@ -127,17 +142,20 @@ def bottle_recognition(img, dets, thresh=0.6):
             area = img[ymin:ymax, xmin:xmax]
             resize = cv2.resize(area, (OUT_IMG_WIDTH, OUT_IMG_HEIGHT))
             resize[:, :, (0, 1, 2)] = resize[:, :, (2, 1, 0)] # OpenCV B/G/R (IMageとは逆) 
-            inps = resize.astype(np.float32) / 255.0
+            # inps = resize.astype(np.float32) / 255.0
+            inps = _image_whitening(np.array(resize, np.float32))
+
             inps = sess.run(tf.expand_dims(tf.cast(inps, tf.float32), 0))
             cand = sess.run(logits, feed_dict={images: inps})
             res, score = disp_result(cand)
             font = cv2.FONT_HERSHEY_SIMPLEX
-            if (ymin - 30) < 0:
-                ybase = ymin + 35
+            if (ymin - 20) < 0:
+                ybase = ymin + 20
             else:
                 ybase = ymin
-            cv2.putText(img, res, (xmin+3, ybase-20), font, 0.4, (0,0,255))
-            cv2.putText(img, str(score), (xmin+3, ybase-8), font, 0.4, (0,0,255))
+            cv2.rectangle(img, (xmin-1, ybase-20), (xmax+1, ybase), (255,0,0), -1)
+            cv2.putText(img, res, (xmin+3, ybase-12), font, 0.3, (255,255,255))
+            cv2.putText(img, str(score), (xmin+3, ybase-2), font, 0.3, (255,255,255))
     # 入力画像表示
     cv2.imshow('Input Image', img)
     cv2.imwrite('tmp01.jpg', img) 

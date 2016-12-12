@@ -3,27 +3,25 @@
 import os
 import sys
 import struct
-import random
 import numpy as np
 import tensorflow as tf
 import pet_data40x80 as pdat
 import pet_info as pinfo
 import pet_result as pres
 
-IMAGE_WIDTH  = 40
-IMAGE_HEIGHT = 80
+IMAGE_WIDTH  = 32
+IMAGE_HEIGHT = 64
 IMAGE_DEPTH  = 3
 
 BOTTLE_CATEGORY_SIZE = 11
 
-ITELATION_NUM = 5000
+ITELATION_NUM = 20000
 MINI_BATCH_SIZE = 100
 CANDIDATE_MAX = 5
 LOG_DIR = './log'
 
-CONV1_FILTER_NUM = 64   # 32
-CONV2_FILTER_NUM = 128  # 64
-CONV3_FILTER_NUM = 128  # 64
+CONV1_FILTER_NUM = 64
+CONV2_FILTER_NUM = 128
 FULL_CONNECT_NUM = 256
 
 def options(argv):
@@ -75,48 +73,43 @@ def max_pool_2x2(x):
                           strides=[1,2,2,1], padding='SAME')
 
 def main(mode, model):
-    # 特徴ベクトルx[][784] 
+    # 特徴ベクトルx[][Height][Width][Depth] 
     x = tf.placeholder(tf.float32, shape=[None, IMAGE_HEIGHT, IMAGE_WIDTH, IMAGE_DEPTH])
     # 目標
     y_ = tf.placeholder(tf.float32, shape=[None, BOTTLE_CATEGORY_SIZE])
 
-    # 4次元tensorに変換
-    # x_image = tf.reshape(x, [-1,28,28,1])
-
     # 1層畳み込み層
     W_conv1 = weight_variable([5,5,3,CONV1_FILTER_NUM])
     b_conv1 = bias_variable([CONV1_FILTER_NUM])
-
     h_conv1 = tf.nn.relu(conv2d(x, W_conv1) + b_conv1)
-    h_pool1 = max_pool_2x2(h_conv1)
+
+    # 1.5層畳み込み層
+    W_conv15 = weight_variable([3,3,CONV1_FILTER_NUM, CONV1_FILTER_NUM])
+    b_conv15 = bias_variable([CONV1_FILTER_NUM])
+    h_conv15 = tf.nn.relu(conv2d(h_conv1, W_conv15) + b_conv15)
+
+    h_pool1 = max_pool_3x3(h_conv15)
 
     # 2層畳み込み層
     W_conv2 = weight_variable([3,3,CONV1_FILTER_NUM,CONV2_FILTER_NUM])
     b_conv2 = bias_variable([CONV2_FILTER_NUM])
-
     h_conv2 = tf.nn.relu(conv2d(h_pool1, W_conv2) + b_conv2)
-    h_pool2 = max_pool_2x2(h_conv2)
 
-    # 3層畳み込み層
-    W_conv3 = weight_variable([3,3,CONV2_FILTER_NUM,CONV3_FILTER_NUM])
-    b_conv3 = bias_variable([CONV3_FILTER_NUM])
-
-    h_conv3 = tf.nn.relu(conv2d(h_pool2, W_conv3) + b_conv3)
-    h_pool3 = max_pool_2x2(h_conv3)
+    h_pool2 = max_pool_3x3(h_conv2)
 
     # 密に結合された層
-    W_fc1 = weight_variable([5*10*CONV3_FILTER_NUM, FULL_CONNECT_NUM])
+    W_fc1 = weight_variable([8*16*CONV2_FILTER_NUM, FULL_CONNECT_NUM])
     b_fc1 = bias_variable([FULL_CONNECT_NUM])
 
-    h_pool3_flat = tf.reshape(h_pool3, [-1, 5*10*CONV3_FILTER_NUM])
-    h_fc1 = tf.nn.relu(tf.matmul(h_pool3_flat, W_fc1) + b_fc1)
+    h_pool2_flat = tf.reshape(h_pool2, [-1, 8*16*CONV2_FILTER_NUM])
+    h_fc1 = tf.nn.relu(tf.matmul(h_pool2_flat, W_fc1) + b_fc1)
 
     # ドロップアウト
     keep_prob = tf.placeholder(tf.float32)
     h_fc1_drop = tf.nn.dropout(h_fc1, keep_prob)
 
     # 読み出し層
-    W_fc2 = weight_variable([256, BOTTLE_CATEGORY_SIZE])
+    W_fc2 = weight_variable([FULL_CONNECT_NUM, BOTTLE_CATEGORY_SIZE])
     b_fc2 = bias_variable([BOTTLE_CATEGORY_SIZE])
 
     y_conv = tf.nn.softmax(tf.matmul(h_fc1_drop, W_fc2) + b_fc2)
@@ -155,21 +148,17 @@ def main(mode, model):
     if mode == 'L' or mode == 'LT' or model == '':
         print('--- Start Learning ---')
         train = pdat.PETBottle('L')
-        num1, dat1, label1 = train.getImage()
-        print('# Learn data num = %d' % num1)
         for i in range(ITELATION_NUM):
             # ミニバッチのデータ
-            idxs = random.sample(xrange(num1), MINI_BATCH_SIZE)
-            batch_xs = dat1[idxs]
-            ys = label1[idxs]
+            batch_xs, label1 = train.getRandomImages(MINI_BATCH_SIZE)
             batch_ys = np.zeros((MINI_BATCH_SIZE, BOTTLE_CATEGORY_SIZE))
             for j in range(MINI_BATCH_SIZE):
-                batch_ys[j][ys[j]] = 1
+                batch_ys[j][label1[j]] = 1
 
             # small batch
             if i%100 == 0:
                 summary, train_acc = sess.run([merged, accuracy], 
-                    feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 1.0})
+                                              feed_dict={x: batch_xs, y_: batch_ys, keep_prob: 1.0})
                 summ_writer.add_summary(summary, i)
                 print('step %d, training accuracy %g' % (i, train_acc))
                 sys.stdout.flush()
@@ -181,13 +170,14 @@ def main(mode, model):
     if mode == 'T' or mode == 'LT':
         test = pdat.PETBottle('T')
         print('--- Start Evaluating ---')
-        num2, dat2, code = test.getImage()
+        num2 = test.getDatNum()
         test_res = pres.Accuracy(CANDIDATE_MAX)
         for i in range(num2):
+            img, code = test.getImage(i)
             label2 = np.zeros((1,BOTTLE_CATEGORY_SIZE))
-            label2[0][code[i]] = 1
-            cand = sess.run(y_conv, feed_dict={x: dat2[[i]], y_: label2, keep_prob: 1.0})
-            test_res.setResult(i, cand, code[i])
+            label2[0][code] = 1
+            cand = sess.run(y_conv, feed_dict={x: [img], y_: label2, keep_prob: 1.0})
+            test_res.setResult(i, cand, code)
         test_res.calcAccuracy(num2)
         test_res.dispConfusionMatrix()
 
